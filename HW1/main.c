@@ -13,7 +13,8 @@
 #include <sys/types.h>
 #include <string.h>
 
-int sizepathfun (const char *path);
+long int sizepathfun (const char *path);
+int sizepathfun2 (const char *path);
 
 
 int main(int argc, const char * argv[]) {
@@ -48,12 +49,36 @@ int main(int argc, const char * argv[]) {
     }
 }
 
-int sizepathfun (const char *path) {
+
+
+long int sizepathfun (const char *path) {
     struct stat fileStat;
     
     if(stat(path,&fileStat) < 0){
         printf("Failed to read path\n");
-        return 1;
+        return -1;
+    }
+    
+    printf("Information for %s\n",path);
+    printf("---------------------------\n");
+    printf("File Size: \t\t%lld bytes\n",fileStat.st_size);
+    printf("Number of Links: \t%d\n",fileStat.st_nlink);
+    printf("File inode: \t\t%llu\n",fileStat.st_ino);
+
+    
+    printf("The file %s a symbolic link\n", (S_ISLNK(fileStat.st_mode)) ? "is" : "is not");
+    printf("off_t: %lu \n", sizeof(off_t));
+    printf("long int: %lu \n", sizeof(long int));
+    return fileStat.st_size;
+}
+
+
+int sizepathfun2 (const char *path) {
+    struct stat fileStat;
+    
+    if(stat(path,&fileStat) < 0){
+        printf("Failed to read path\n");
+        return -1;
     }
     
     printf("Information for %s\n",path);
@@ -78,5 +103,5 @@ int sizepathfun (const char *path) {
     printf("The file %s a symbolic link\n", (S_ISLNK(fileStat.st_mode)) ? "is" : "is not");
 
    
-    return 0;
+    return (int) fileStat.st_size;
 }
