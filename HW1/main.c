@@ -1,127 +1,95 @@
-//
-//  main.c
-//  HW1
-//
-//  Created by Muhammed Okumuş on 1.03.2019.
-//  Copyright © 2019 Muhammed Okumuş. All rights reserved.
-//
-
 #include <stdio.h>
-#include <stdlib.h>
+#include <errno.h>
 #include <unistd.h>
-#include <sys/stat.h>
 #include <sys/types.h>
-#include <string.h>
+#include <sys/stat.h>
+#include <ftw.h>
 #include <dirent.h>
+#include <string.h>
 
-long int sizepathfun (const char *path);
-long int depthFirstApply (const char *path, long int pathfun (const char *path1));
-void listdir(const char *name);
+static unsigned int total = 0;
+static unsigned int special = 0;
+static unsigned int zflag = 0; //0 is off, 1 is on
 
-int main(int argc, const char * argv[]) {
-   
-   // depthFirstApply(argv[1], sizepathfun);
-    listdir(argv[1]);
+int sum(const char *fpath, const struct stat *sb, int typeflag);
+int wrapper(const char *path, int sum (const char *fpath, const struct stat *sb, int typeflag));
+int sizepathfun (char *path);
+int postOrderApply (char *path, int pathfun (char *path1));
 
+int main(int argc, char **argv) {
+    int result = -1;
     
-    
-    
-    //No arguments given
-    if(argv[1] == NULL) {
-        printf(">No argument run\n");
-        sizepathfun(argv[0]);
-        return 1;
-    }
-    
-    // handle -z flag and path
-    if(strcmp(argv[1],"-z") == 0 && argv[2] != NULL) {
-        printf(">[-z] flag run\n");
-        sizepathfun(argv[2]);
-        return 1;
-    }
-    
-    // handle path
-    if(argv[2] == NULL) {
-        printf(">Only path run\n");
+    if(argc == 2){
+        result = postOrderApply(argv[1], sizepathfun);
         sizepathfun(argv[1]);
-        return 1;
+        return result;
     }
     
-    else{
-        //Program usage
-        //printf(">Expecting \n");
-        //printf("argc: %i \nargv[0]: %s \nargv[1]: %s \nargv[2]: %s\n", argc, argv[0], argv[1], argv[2]);
-        
-        return 0;
-    }
-}
-
-
-void listdir(const char *name)
-{
-    DIR *d;
-    struct dirent *DIR;
-    
-    if (!(d = opendir(name)))
-        return;
-    if (!(DIR = readdir(d)))
-        return;
-    
-    do {
-        if (DIR->d_type == DT_DIR) {
-            char path[1024];
-            int len = snprintf(path, sizeof(path)-1, "%s/%s", name, DIR->d_name);
-            path[len] = 0;
-            if (strncmp(DIR->d_name, ".",1) == 0)
-                continue;
-            
-            printf("path: %s\n", path);
-           // printf("%s\n", DIR->d_name);
-           
-            listdir(path);
-        }
-        else{
-            printf("%s\n", DIR->d_name);
-        }
-    } while ((DIR = readdir(d)));
-    closedir(d);
-}
-
-
-long int depthFirstApply (const char *path, long int pathfun (const char *path1)){
-    DIR *d;
-    struct dirent * dir;
-  
-    d = opendir(path);
-    while((dir = readdir(d)) != NULL) {
-        char filepath[1024] ;
-        strcpy(filepath, path);
-        strcat(filepath, "/");
-        strcat(filepath, dir->d_name);
-    
-        
-        sizepathfun(filepath);
+    else if(argc == 3){
+        zflag = 1;
+        result = postOrderApply(argv[2], sizepathfun);
+        sizepathfun(argv[2]);
+        return result;
     }
     
-    closedir(d);
-    return pathfun(path);
+    printf("Usage \n--------- \n");
+    printf("%s path/to/folder\n", argv[0]);
+    printf("%s -z path/to/folder\n", argv[0]);
+    
+    return result;
 }
 
+int sum(const char *fpath, const struct stat *sb, int typeflag) {
+    total += sb->st_size;
+    return 0;
+}
 
-long int sizepathfun (const char *path) {
-    struct stat fileStat;
-    
-    if(stat(path,&fileStat) < 0){
-        printf("Failed to read path\n");
+int wrapper(const char *path,int sum (const char *fpath, const struct stat *sb, int typeflag)){
+    if (ftw(path, sum, 1)) {
+        perror("ftw error");
         return -1;
     }
-    
-    if(S_ISLNK(fileStat.st_mode)){
-        printf("Special file beware");
-        return fileStat.st_size;
-    }
-    
-    printf("%-8lld %s\n", fileStat.st_size, path);
-   
-    return fileStat.st_size;
+    printf("%s: %u\n", path, total);
+    return 0;
 }
+
+int sizepathfun (char *path){
+    int temp;
+    if (ftw(path, &sum, 1)) {
+        perror("ftw");
+        return -1;
+    }
+    temp = total;
+    total = 0;
+    printf("%-10u %s\n", temp, path);
+    return temp;
+}
+
+int postOrderApply (char *path, int pathfun (char *path1)){
+    DIR *dir;
+    struct dirent *entry;
+    
+    if (!(dir = opendir(path)))
+        return -1;
+    
+    
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_DIR) {
+            char filepath[1024];
+            if (strncmp(entry->d_name, ".",1) == 0)
+                continue;
+            
+            strcpy(filepath, path);
+            strcat(filepath, "/");
+            strcat(filepath, entry->d_name);
+            
+            pathfun(filepath);
+            postOrderApply(filepath, pathfun);
+        }
+        else
+            printf("Special file beware%d\n",special++);
+    }
+    closedir(dir);
+    return -1;
+}
+
